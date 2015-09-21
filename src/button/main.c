@@ -42,7 +42,7 @@ int main(void)
 
     // infinity loop 1
     while(1) {
-        int c = getchar();
+        getchar();
     }
 
     return 0;
