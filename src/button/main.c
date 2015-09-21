@@ -8,6 +8,7 @@
 #define BTN_PULL    GPIO_PULLUP
 #define BTN_FLANK   GPIO_BOTH
 
+// callback function for button interrupt, LED on if button pressed
 static void btn_callback(void* arg)
 {
     gpio_t pin = *((gpio_t*)arg);
@@ -29,6 +30,7 @@ int main(void)
     printf("This board features a(n) %s MCU.\n", RIOT_MCU);
     puts("================");
 
+    // init button as interrupt to trigger LED
     int gpio_pin = GPIO(BTN_PORT, BTN_PIN);
     if (gpio_init_int(gpio_pin, BTN_PULL, BTN_FLANK, btn_callback, (void *)&gpio_pin) < 0) {
         printf("Error while initializing  PORT_%i.%02i as external interrupt\n",
@@ -37,12 +39,10 @@ int main(void)
     }
     printf("PORT_%i.%02i initialized successful as external interrupt\n",
            BTN_PORT, BTN_PIN);
+
+    // infinity loop 1
     while(1) {
-        puts("Press \'q\' to quit ...");
         int c = getchar();
-        if (c == 'q') {
-            break;
-        }
     }
 
     return 0;
