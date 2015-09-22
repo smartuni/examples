@@ -1,4 +1,6 @@
-// written by smlng
+/**
+ * written by smlng
+ */
 #include <stdio.h>
 #include "board.h"
 #include "periph/gpio.h"
@@ -9,7 +11,11 @@
 #define BTN_PULL    GPIO_PULLUP
 #define BTN_FLANK   GPIO_BOTH
 
-// callback function for button interrupt, LED on if button pressed
+/**
+ * @brief callback function for button interrupt
+ *
+ * @param arg: contains gpio pin
+ */
 static void btn_callback(void* arg)
 {
     gpio_t pin = *((gpio_t*)arg);
