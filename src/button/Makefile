@@ -1,6 +1,5 @@
 # name of your application
 APPLICATION = button
-USEMODULE += xtimer
 
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
