@@ -164,12 +164,12 @@ static void _parse(gnrc_pktsnip_t *pkt)
     if (strlen(payload_str) > 0) {
         LED_ON;
         if (strcmp(payload_str, "PING") == 0) {
-            printf(". received PING from %s.\n", src_addr_str);
+            printf(". received PING from [%s].\n", src_addr_str);
             pong(src_addr_str);
 
         }
         if (strcmp(payload_str, "PONG") == 0) {
-            printf(". received PONG from %s.\n", src_addr_str);
+            printf(". received PONG from [%s].\n", src_addr_str);
         }
         LED_OFF;
     }
