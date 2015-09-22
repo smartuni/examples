@@ -1,5 +1,5 @@
 # name of your application
-APPLICATION = button
+APPLICATION = smartuni_example_button
 
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
