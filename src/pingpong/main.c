@@ -37,6 +37,8 @@ static char pp_stack[THREAD_STACKSIZE_MAIN];
 
 /**
  * @brief the main programm loop
+ *
+ * @return 1 on error
  */
 int main(void)
 {
@@ -62,8 +64,10 @@ int main(void)
 /**
  * @brief send a (multicast) ping
  *
- * @param argc: unused
- * @param argv: unused
+ * @param[in] argc  unused
+ * @param[in] argv  unused
+ *
+ * @return 0 on success
  */
 static int ping(int argc, char **argv)
 {
@@ -75,7 +79,7 @@ static int ping(int argc, char **argv)
 /**
  * @brief send a (unicast) pong
  *
- * @param addr_str: unicast destination address
+ * @param[in] addr_str  unicast destination address
  */
 static void pong(char *addr_str)
 {
@@ -86,8 +90,8 @@ static void pong(char *addr_str)
 /*
  * @brief generic udp send method
  *
- * @param addr_str: destination address
- * @param data: payload to send
+ * @param[in] addr_str  destination address
+ * @param[in] data      payload to send
  */
 static void send(char *addr_str, char *data)
 {
@@ -144,7 +148,7 @@ static void start_receiver(void)
 /**
  * @brief parse udp packet content
  *
- * @param pkt: pointer to packet content
+ * @param[in] pkt   pointer to packet content
  */
 static void _parse(gnrc_pktsnip_t *pkt)
 {
@@ -195,7 +199,7 @@ static void _parse(gnrc_pktsnip_t *pkt)
 /**
  * @brief udp receiver thread function
  *
- * @param arg: unused
+ * @param[in] arg   unused
  */
 static void *_receiver(void *arg)
 {

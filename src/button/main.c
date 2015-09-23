@@ -12,9 +12,9 @@
 #define BTN_FLANK   GPIO_BOTH
 
 /**
- * @brief callback function for button interrupt
+ * @brief   callback function for button interrupt
  *
- * @param arg: contains gpio pin
+ * @param[in] arg   contains gpio pin
  */
 static void btn_callback(void* arg)
 {
@@ -29,7 +29,11 @@ static void btn_callback(void* arg)
     }
 }
 
-// main
+/**
+ * @ brief  the main loop
+ *
+ * @return 1 on error
+ */
 int main(void)
 {
     puts("SmartUniversity - Button Example!");
