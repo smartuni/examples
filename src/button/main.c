@@ -5,11 +5,28 @@
 #include "board.h"
 #include "periph/gpio.h"
 
+// compatibility
+#ifndef LED_ON
+#define LED_ON      LED_RED_ON
+#define LED_OFF     LED_RED_OFF
+#define LED_TOGGLE  LED_RED_TOGGLE
+#endif
+
 // button parameters, matching Atmel SAM R21 board
-#define BTN_PORT    0
+#ifdef BOARD_SAMR21_XPRO
+#define BTN_PORT    0   // Port+Pin A28
 #define BTN_PIN     28
 #define BTN_PULL    GPIO_PULLUP
 #define BTN_FLANK   GPIO_BOTH
+#endif
+// or button parameters, matching Phytec phyWAVE
+// Note: port is ignored, only pin is used by GPIO
+#ifdef BOARD_PBA_D_01_KW2X
+#define BTN_PORT    0   // Port+Pin D1
+#define BTN_PIN     3
+#define BTN_PULL    GPIO_PULLUP
+#define BTN_FLANK   GPIO_BOTH
+#endif
 
 /**
  * @brief   callback function for button interrupt
