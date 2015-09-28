@@ -18,10 +18,10 @@
 #define BTN_PIN     28
 #define BTN_PULL    GPIO_PULLUP
 #define BTN_FLANK   GPIO_BOTH
-#endif
+#else
 // or button parameters, matching Phytec phyWAVE
 // Note: port is ignored, only pin is used by GPIO
-#ifdef BOARD_PBA_D_01_KW2X
+//#ifdef BOARD_PBA_D_01_KW2X
 #define BTN_PORT    0   // Port+Pin D1
 #define BTN_PIN     3
 #define BTN_PULL    GPIO_PULLUP
