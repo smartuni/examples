@@ -2,29 +2,32 @@
  * written by smlng
  */
 
-#include <stdio.h>
-#include <inttypes.h>
+ #include <inttypes.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+
+ #include <arpa/inet.h>
+ #include <netinet/in.h>
+ #include <sys/socket.h>
+ #include <unistd.h>
+
 #include "board.h"
 #include "periph/gpio.h"
 
-#include "kernel.h"
-#include "net/gnrc.h"
-#include "net/gnrc/ipv6.h"
-#include "net/gnrc/udp.h"
 #include "shell.h"
 #include "thread.h"
 
 // some parameters
-#define PP_MAX_PAYLOAD      (16)
+#define PP_BUF_SIZE         (16)
 #define PP_MSG_QUEUE_SIZE   (8U)
 #define PP_PORT             (6414)
 
 // function prototypes
 static int ping(int argc, char **argv);
-static void pong(char *addr_str);
-static void send(char *addr_str, char *data);
+static int pong(char *addr_str);
+static int pp_send(char *addr_str, char *data);
 static void start_receiver(void);
-static void _parse(gnrc_pktsnip_t *pkt);
 static void *_receiver(void *arg);
 
 // array with available shell commands
@@ -33,7 +36,10 @@ static const shell_command_t shell_commands[] = {
     { NULL, NULL, NULL }
 };
 // thread stack
-static char pp_stack[THREAD_STACKSIZE_MAIN];
+static char pp_stack[THREAD_STACKSIZE_DEFAULT];
+static int pp_socket = -1;
+static char pp_buffer[PP_BUF_SIZE];
+static msg_t pp_msg_queue[PP_MSG_QUEUE_SIZE];
 
 /**
  * @brief the main programm loop
@@ -72,8 +78,8 @@ int main(void)
 static int ping(int argc, char **argv)
 {
     puts(". send PING to [ff02::1]");
-    send("ff02::1", "PING");
-    return 0;
+    int ret = pp_send("ff02::1", "PING");
+    return ret;
 }
 
 /**
@@ -81,10 +87,11 @@ static int ping(int argc, char **argv)
  *
  * @param[in] addr_str  unicast destination address
  */
-static void pong(char *addr_str)
+static int pong(char *addr_str)
 {
     printf(". send PONG to [%s].\n", addr_str);
-    send(addr_str, "PONG");
+    int ret = pp_send(addr_str, "PONG");
+    return ret;
 }
 
 /*
@@ -93,46 +100,34 @@ static void pong(char *addr_str)
  * @param[in] addr_str  destination address
  * @param[in] data      payload to send
  */
-static void send(char *addr_str, char *data)
+static int pp_send(char *addr_str, char *data)
 {
-    ipv6_addr_t addr;
-    uint8_t port[2];
-    uint16_t temp = PP_PORT;
-    port[0] = (uint8_t)temp;
-    port[1] = temp >> 8;
-
-    // parse destination address
-    if (ipv6_addr_from_str(&addr, addr_str) == NULL) {
+    struct sockaddr_in6 src, dst;
+    size_t data_len = strlen(data);
+    uint16_t port;
+    int s;
+    src.sin6_family = AF_INET6;
+    dst.sin6_family = AF_INET6;
+    memset(&src.sin6_addr, 0, sizeof(src.sin6_addr));
+    /* parse destination address */
+    if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
         puts("Error: unable to parse destination address");
-        return;
+        return 1;
     }
-    gnrc_pktsnip_t *payload, *udp, *ip;
-    // allocate payload
-    payload = gnrc_pktbuf_add(NULL, data, strlen(data), GNRC_NETTYPE_UNDEF);
-    if (payload == NULL) {
-        puts("Error: unable to copy data to packet buffer");
-        return;
+    /* parse port */
+    port = (uint16_t)PP_PORT;
+    dst.sin6_port = htons(port);
+    src.sin6_port = htons(port);
+    s = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    if (s < 0) {
+        puts("error initializing socket");
+        return 1;
     }
-    // allocate UDP header
-    udp = gnrc_udp_hdr_build(payload, port, 2, port, 2);
-    if (udp == NULL) {
-        puts("Error: unable to allocate UDP header");
-        gnrc_pktbuf_release(payload);
-        return;
+    if (sendto(s, data, data_len, 0, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
+        puts("error sending data");
     }
-    // allocate IPv6 header
-    ip = gnrc_ipv6_hdr_build(udp, NULL, 0, (uint8_t *)&addr, sizeof(addr));
-    if (ip == NULL) {
-        puts("Error: unable to allocate IPv6 header");
-        gnrc_pktbuf_release(udp);
-        return;
-    }
-    // send packet
-    if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_UDP, GNRC_NETREG_DEMUX_CTX_ALL, ip)) {
-        puts("Error: unable to locate UDP thread");
-        gnrc_pktbuf_release(ip);
-        return;
-    }
+    close(s);
+    return 0;
 }
 
 /**
@@ -146,95 +141,61 @@ static void start_receiver(void)
 }
 
 /**
- * @brief parse udp packet content
- *
- * @param[in] pkt   pointer to packet content
- */
-static void _parse(gnrc_pktsnip_t *pkt)
-{
-    ipv6_hdr_t *ihdr;
-    gnrc_pktsnip_t *snip = pkt;
-    char src_addr_str[IPV6_ADDR_MAX_STR_LEN];
-    char payload_str[PP_MAX_PAYLOAD];
-
-    // parse headers and payload
-    while (snip != NULL) {
-        switch (snip->type) {
-            case GNRC_NETTYPE_UNDEF:
-                printf(". parse payload (%u Bytes)\n", snip->size);
-                if (snip->size < PP_MAX_PAYLOAD) {
-                    memcpy(payload_str, (char *)snip->data, snip->size);
-                    payload_str[snip->size] = '\0';
-                    printf(".. content: %s\n", payload_str);
-                }
-                break;
-            case GNRC_NETTYPE_IPV6:
-                puts(".. parse IPv6");
-                ihdr = (ipv6_hdr_t *)snip->data;
-                ipv6_addr_to_str(src_addr_str, &ihdr->src, sizeof(src_addr_str));
-                break;
-            case GNRC_NETTYPE_UDP:
-                puts(".. parse UDP");
-                break;
-            default:
-                break;
-        }
-        snip = snip->next;
-    }
-    // if packet had payload, check for PING or PONG
-    if (strlen(payload_str) > 0) {
-        LED_ON;
-        if (strcmp(payload_str, "PING") == 0) {
-            printf(". received PING from [%s].\n", src_addr_str);
-            pong(src_addr_str);
-
-        }
-        if (strcmp(payload_str, "PONG") == 0) {
-            printf(". received PONG from [%s].\n", src_addr_str);
-        }
-        LED_OFF;
-    }
-}
-
-/**
  * @brief udp receiver thread function
  *
  * @param[in] arg   unused
  */
 static void *_receiver(void *arg)
 {
-    (void)arg;
-    uint16_t port = PP_PORT;
-    gnrc_netreg_entry_t pp_receiver;
-    msg_t msg, reply;
-    msg_t msg_queue[PP_MSG_QUEUE_SIZE];
-
-    reply.content.value = (uint32_t)(-ENOTSUP);
-    reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
-    // setup the message queue
-    msg_init_queue(msg_queue, PP_MSG_QUEUE_SIZE);
-
-    // start receiver
-    pp_receiver.pid = thread_getpid();
-    pp_receiver.demux_ctx = (uint32_t)port;
-    gnrc_netreg_register(GNRC_NETTYPE_UDP, &pp_receiver);
-
+    struct sockaddr_in6 server_addr;
+    char src_addr_str[IPV6_ADDR_MAX_STR_LEN];
+    uint16_t port;
+    msg_init_queue(pp_msg_queue, PP_MSG_QUEUE_SIZE);
+    pp_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    /* parse port */
+    port = (uint16_t)PP_PORT;
+    if (port == 0) {
+        puts("Error: invalid port specified");
+        return NULL;
+    }
+    server_addr.sin6_family = AF_INET6;
+    memset(&server_addr.sin6_addr, 0, sizeof(server_addr.sin6_addr));
+    server_addr.sin6_port = htons(port);
+    if (pp_socket < 0) {
+        puts("error initializing socket");
+        pp_socket = 0;
+        return NULL;
+    }
+    if (bind(pp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        pp_socket = -1;
+        puts("error binding socket");
+        return NULL;
+    }
+    printf("Success: started UDP server on port %" PRIu16 "\n", port);
     while (1) {
-        msg_receive(&msg);
-        switch (msg.type) {
-            case GNRC_NETAPI_MSG_TYPE_RCV:
-                _parse((gnrc_pktsnip_t *)msg.content.ptr);
-                break;
-            case GNRC_NETAPI_MSG_TYPE_SND:
-                break;
-            case GNRC_NETAPI_MSG_TYPE_GET:
-            case GNRC_NETAPI_MSG_TYPE_SET:
-                msg_reply(&msg, &reply);
-                break;
-            default:
-                break;
+        int res;
+        struct sockaddr_in6 src;
+        socklen_t src_len = sizeof(struct sockaddr_in6);
+        if ((res = recvfrom(pp_socket, pp_buffer, sizeof(pp_buffer), 0,
+                            (struct sockaddr *)&src, &src_len)) < 0) {
+            puts("Error on receive");
+        }
+        else if (res == 0) {
+            puts("Peer did shut down");
+        }
+        else {
+            inet_ntop(AF_INET6, &(src.sin6_addr),
+                                            src_addr_str, sizeof(src_addr_str));
+            LED_ON;
+            if (strcmp(pp_buffer, "PING") == 0) {
+                printf(". received PING from [%s].\n", src_addr_str);
+                pong(src_addr_str);
+            }
+            if (strcmp(pp_buffer, "PONG") == 0) {
+                printf(". received PONG from [%s].\n", src_addr_str);
+            }
+            LED_OFF;
         }
     }
-    // never reached
     return NULL;
 }
