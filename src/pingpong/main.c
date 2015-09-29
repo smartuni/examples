@@ -1,24 +1,23 @@
 /**
  * written by smlng
  */
-
+// standard
  #include <inttypes.h>
  #include <stdio.h>
  #include <stdlib.h>
  #include <string.h>
-
+// network
  #include <arpa/inet.h>
  #include <netinet/in.h>
  #include <sys/socket.h>
  #include <unistd.h>
-
+// riot
 #include "board.h"
 #include "periph/gpio.h"
-
 #include "shell.h"
 #include "thread.h"
 
-// some parameters
+// parameters
 #define PP_BUF_SIZE         (16)
 #define PP_MSG_QUEUE_SIZE   (8U)
 #define PP_PORT             (6414)
@@ -35,7 +34,7 @@ static const shell_command_t shell_commands[] = {
     { "ping", "send multicast ping", ping },
     { NULL, NULL, NULL }
 };
-// thread stack
+// static vars
 static char pp_stack[THREAD_STACKSIZE_DEFAULT];
 static int pp_socket = -1;
 static char pp_buffer[PP_BUF_SIZE];
@@ -44,7 +43,7 @@ static msg_t pp_msg_queue[PP_MSG_QUEUE_SIZE];
 /**
  * @brief the main programm loop
  *
- * @return 1 on error
+ * @return non zero on error
  */
 int main(void)
 {
@@ -73,7 +72,7 @@ int main(void)
  * @param[in] argc  unused
  * @param[in] argv  unused
  *
- * @return 0 on success
+ * @return 0 on success, or 1 if failed
  */
 static int ping(int argc, char **argv)
 {
@@ -86,6 +85,8 @@ static int ping(int argc, char **argv)
  * @brief send a (unicast) pong
  *
  * @param[in] addr_str  unicast destination address
+ *
+ * @return 0 on success, or 1 if failed
  */
 static int pong(char *addr_str)
 {
@@ -99,6 +100,8 @@ static int pong(char *addr_str)
  *
  * @param[in] addr_str  destination address
  * @param[in] data      payload to send
+ *
+ * @return 0 on success, or 1 if failed
  */
 static int pp_send(char *addr_str, char *data)
 {
@@ -176,6 +179,7 @@ static void *_receiver(void *arg)
         int res;
         struct sockaddr_in6 src;
         socklen_t src_len = sizeof(struct sockaddr_in6);
+        // blocking receive, waiting for data
         if ((res = recvfrom(pp_socket, pp_buffer, sizeof(pp_buffer), 0,
                             (struct sockaddr *)&src, &src_len)) < 0) {
             puts("Error on receive");
@@ -183,18 +187,20 @@ static void *_receiver(void *arg)
         else if (res == 0) {
             puts("Peer did shut down");
         }
-        else {
+        else { // check for PING or PONG
             inet_ntop(AF_INET6, &(src.sin6_addr),
-                                            src_addr_str, sizeof(src_addr_str));
-            LED_ON;
+                      src_addr_str, sizeof(src_addr_str));
+
             if (strcmp(pp_buffer, "PING") == 0) {
                 printf(". received PING from [%s].\n", src_addr_str);
                 pong(src_addr_str);
             }
-            if (strcmp(pp_buffer, "PONG") == 0) {
+            else if (strcmp(pp_buffer, "PONG") == 0) {
                 printf(". received PONG from [%s].\n", src_addr_str);
             }
-            LED_OFF;
+            else {
+                printf(". unknown data (%dB) from [%s].\n", res, src_addr_str);
+            }
         }
     }
     return NULL;
