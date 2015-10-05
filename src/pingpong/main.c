@@ -199,7 +199,7 @@ static void *_receiver(void *arg)
                 printf(". received PONG from [%s].\n", src_addr_str);
             }
             else {
-                printf(". unknown data (%dB) from [%s].\n", res, src_addr_str);
+                printf(". received data from [%s] with %d bytes.\n", src_addr_str, res);
             }
         }
     }
