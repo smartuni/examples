@@ -18,10 +18,6 @@ USEMODULE += gnrc_ipv6_default
 USEMODULE += gnrc_udp
 USEMODULE += gnrc_conn_udp
 USEMODULE += posix_sockets
-# Add shell and commands
-USEMODULE += shell
-USEMODULE += shell_commands
-USEMODULE += ps
 
 USEPKG += microcoap
 
