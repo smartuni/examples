@@ -21,7 +21,7 @@
 
 // parameters
 #define COAP_BUF_SIZE         (63)
-#define COAP_PORT             (24911)
+#define COAP_PORT             (5683)
 
 /**
  * @brief the main programm loop
