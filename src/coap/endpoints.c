@@ -24,6 +24,12 @@ void endpoint_setup(void)
     build_rsp();
 }
 
+static const coap_endpoint_path_t path_well_known_core = {2, {".well-known", "core"}};
+static int handle_get_well_known_core(coap_rw_buffer_t *scratch, const coap_packet_t *inpkt, coap_packet_t *outpkt, uint8_t id_hi, uint8_t id_lo)
+{
+    return coap_make_response(scratch, outpkt, (const uint8_t *)rsp, strlen(rsp), id_hi, id_lo, &inpkt->tok, COAP_RSPCODE_CONTENT, COAP_CONTENTTYPE_APPLICATION_LINKFORMAT);
+}
+
 static const coap_endpoint_path_t path_led = {1, {"led"}};
 static int handle_get_led(coap_rw_buffer_t *scratch, const coap_packet_t *inpkt, coap_packet_t *outpkt, uint8_t id_hi, uint8_t id_lo)
 {
@@ -52,6 +58,7 @@ static int handle_put_led(coap_rw_buffer_t *scratch, const coap_packet_t *inpkt,
 
 const coap_endpoint_t endpoints[] =
 {
+    {COAP_METHOD_GET, handle_get_well_known_core, &path_well_known_core, "ct=40"},
     {COAP_METHOD_GET, handle_get_led, &path_led, "ct=0"},
     {COAP_METHOD_PUT, handle_put_led, &path_led, NULL},
     {(coap_method_t)0, NULL, NULL, NULL}
