@@ -56,11 +56,21 @@ static int handle_put_led(coap_rw_buffer_t *scratch, const coap_packet_t *inpkt,
     }
 }
 
+static int handle_response(coap_rw_buffer_t *scratch, const coap_packet_t *inpkt, coap_packet_t *outpkt, uint8_t id_hi, uint8_t id_lo)
+{
+    if (inpkt->payload.len > 0) {
+        printf("%s\n", inpkt->payload.p);
+    }
+    return 0;
+}
+
 const coap_endpoint_t endpoints[] =
 {
     {COAP_METHOD_GET, handle_get_well_known_core, &path_well_known_core, "ct=40"},
     {COAP_METHOD_GET, handle_get_led, &path_led, "ct=0"},
     {COAP_METHOD_PUT, handle_put_led, &path_led, NULL},
+    {COAP_RSPCODE_CONTENT, handle_response, &path_led, NULL},
+    {COAP_RSPCODE_CONTENT, handle_response, &path_well_known_core, NULL},
     {(coap_method_t)0, NULL, NULL, NULL}
 };
 
