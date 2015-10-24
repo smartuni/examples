@@ -36,7 +36,6 @@ static const shell_command_t shell_commands[] = {
 };
 // static vars
 static char pp_stack[THREAD_STACKSIZE_DEFAULT];
-static int pp_socket = -1;
 static char pp_buffer[PP_BUF_SIZE];
 static msg_t pp_msg_queue[PP_MSG_QUEUE_SIZE];
 
@@ -150,11 +149,13 @@ static void start_receiver(void)
  */
 static void *_receiver(void *arg)
 {
+    (void) arg;
+    
     struct sockaddr_in6 server_addr;
     char src_addr_str[IPV6_ADDR_MAX_STR_LEN];
     uint16_t port;
     msg_init_queue(pp_msg_queue, PP_MSG_QUEUE_SIZE);
-    pp_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    int pp_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     /* parse port */
     port = (uint16_t)PP_PORT;
     if (port == 0) {
@@ -166,11 +167,9 @@ static void *_receiver(void *arg)
     server_addr.sin6_port = htons(port);
     if (pp_socket < 0) {
         puts("error initializing socket");
-        pp_socket = 0;
         return NULL;
     }
     if (bind(pp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        pp_socket = -1;
         puts("error binding socket");
         return NULL;
     }
