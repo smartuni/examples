@@ -76,6 +76,8 @@ int main(void)
  */
 static int ping(int argc, char **argv)
 {
+    (void) argv;
+    (void) argc;
     puts(". send PING to [ff02::1]");
     int ret = pp_send("ff02::1", "PING");
     return ret;
@@ -114,7 +116,7 @@ static int pp_send(char *addr_str, char *data)
     memset(&src.sin6_addr, 0, sizeof(src.sin6_addr));
     /* parse destination address */
     if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
-        puts("Error: unable to parse destination address");
+        puts("ERROR pp_send: parse destination address");
         return 1;
     }
     /* parse port */
@@ -123,11 +125,11 @@ static int pp_send(char *addr_str, char *data)
     src.sin6_port = htons(port);
     s = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (s < 0) {
-        puts("error initializing socket");
+        puts("ERROR pp_send: initializing socket");
         return 1;
     }
     if (sendto(s, data, data_len, 0, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
-        puts("error sending data");
+        puts("ERROR pp_send: sending data");
     }
     close(s);
     return 0;
@@ -150,6 +152,7 @@ static void start_receiver(void)
  */
 static void *_receiver(void *arg)
 {
+    (void) arg;
     struct sockaddr_in6 server_addr;
     char src_addr_str[IPV6_ADDR_MAX_STR_LEN];
     uint16_t port;
@@ -158,20 +161,20 @@ static void *_receiver(void *arg)
     /* parse port */
     port = (uint16_t)PP_PORT;
     if (port == 0) {
-        puts("Error: invalid port specified");
+        puts("ERROR receiver: invalid port");
         return NULL;
     }
     server_addr.sin6_family = AF_INET6;
     memset(&server_addr.sin6_addr, 0, sizeof(server_addr.sin6_addr));
     server_addr.sin6_port = htons(port);
     if (pp_socket < 0) {
-        puts("error initializing socket");
+        puts("ERROR receiver: create socket");
         pp_socket = 0;
         return NULL;
     }
     if (bind(pp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         pp_socket = -1;
-        puts("error binding socket");
+        puts("ERROR receiver: bind socket");
         return NULL;
     }
     printf("Success: started UDP server on port %" PRIu16 "\n", port);
@@ -182,10 +185,10 @@ static void *_receiver(void *arg)
         // blocking receive, waiting for data
         if ((res = recvfrom(pp_socket, pp_buffer, sizeof(pp_buffer), 0,
                             (struct sockaddr *)&src, &src_len)) < 0) {
-            puts("Error on receive");
+            puts("ERROR receiver: recvfrom");
         }
         else if (res == 0) {
-            puts("Peer did shut down");
+            puts("WARN receiver: Peer did shut down");
         }
         else { // check for PING or PONG
             inet_ntop(AF_INET6, &(src.sin6_addr),
