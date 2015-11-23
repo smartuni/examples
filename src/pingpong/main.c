@@ -21,11 +21,12 @@
 #define PP_BUF_SIZE         (16)
 #define PP_MSG_QUEUE_SIZE   (8U)
 #define PP_PORT             (6414)
+#define PP_SCOPE            (0) // outgoing interface, 0 = default
 
 // function prototypes
 static int ping(int argc, char **argv);
-static int pong(char *addr_str);
-static int pp_send(char *addr_str, char *data);
+static int pong(char *addr_str, uint32_t scope);
+static int pp_send(char *addr_str, uint32_t scope, char *data);
 static void start_receiver(void);
 static void *_receiver(void *arg);
 
@@ -78,7 +79,7 @@ static int ping(int argc, char **argv)
     (void) argv;
     (void) argc;
     puts(". send PING to [ff02::1]");
-    int ret = pp_send("ff02::1", "PING");
+    int ret = pp_send("ff02::1", PP_SCOPE, "PING");
     return ret;
 }
 
@@ -89,10 +90,10 @@ static int ping(int argc, char **argv)
  *
  * @return 0 on success, or 1 if failed
  */
-static int pong(char *addr_str)
+static int pong(char *addr_str, uint32_t scope)
 {
     printf(". send PONG to [%s].\n", addr_str);
-    int ret = pp_send(addr_str, "PONG");
+    int ret = pp_send(addr_str, scope, "PONG");
     return ret;
 }
 
@@ -104,15 +105,13 @@ static int pong(char *addr_str)
  *
  * @return 0 on success, or 1 if failed
  */
-static int pp_send(char *addr_str, char *data)
+static int pp_send(char *addr_str, uint32_t scope, char *data)
 {
-    struct sockaddr_in6 src, dst;
+    struct sockaddr_in6 dst;
     size_t data_len = strlen(data);
     uint16_t port;
     int s;
-    src.sin6_family = AF_INET6;
     dst.sin6_family = AF_INET6;
-    memset(&src.sin6_addr, 0, sizeof(src.sin6_addr));
     /* parse destination address */
     if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
         puts("ERROR pp_send: parse destination address");
@@ -121,7 +120,7 @@ static int pp_send(char *addr_str, char *data)
     /* parse port */
     port = (uint16_t)PP_PORT;
     dst.sin6_port = htons(port);
-    src.sin6_port = htons(port);
+    dst.sin6_scope_id = scope;
     s = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (s < 0) {
         puts("ERROR pp_send: initializing socket");
@@ -152,7 +151,7 @@ static void start_receiver(void)
 static void *_receiver(void *arg)
 {
     (void) arg;
-    
+
     struct sockaddr_in6 server_addr;
     char src_addr_str[IPV6_ADDR_MAX_STR_LEN];
     uint16_t port;
@@ -196,7 +195,7 @@ static void *_receiver(void *arg)
 
             if (strcmp(pp_buffer, "PING") == 0) {
                 printf(". received PING from [%s].\n", src_addr_str);
-                pong(src_addr_str);
+                pong(src_addr_str, src.sin6_scope_id);
             }
             else if (strcmp(pp_buffer, "PONG") == 0) {
                 printf(". received PONG from [%s].\n", src_addr_str);
