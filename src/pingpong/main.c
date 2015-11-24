@@ -9,6 +9,7 @@
 // network
  #include <arpa/inet.h>
  #include <netinet/in.h>
+ #include <sys/types.h>
  #include <sys/socket.h>
  #include <unistd.h>
 // check for riot
@@ -22,24 +23,34 @@
 #include "periph/gpio.h"
 #include "shell.h"
 #include "thread.h"
-
+#include "getaddrinfo.h"
 #else   //RIOT_VERSION
 #include <pthread.h>
+#include <netdb.h>
 #endif  // RIOT_VERSION
 
 // parameters
 #define PP_BUF_SIZE         (16)
 #define PP_MSG_QUEUE_SIZE   (8U)
 #define PP_PORT             (6414)
+#define PP_PORT_STR         "6414"
 
 // function prototypes
 static int ping(int argc, char **argv);
 static int pong(char *addr_str);
+//static int pp_send(char *addr_str, char *data);
 static int pp_send(char *addr_str, char *data);
 static void start_receiver(void);
 static void *_receiver(void *arg);
 
 #ifdef __RIOT__
+extern int getaddrinfo(const char *node, const char *service,
+                const struct addrinfo *hints,
+                struct addrinfo **res);
+
+extern void freeaddrinfo(struct addrinfo *res);
+
+extern const char *gai_strerror(int errcode);
 // array with available shell commands
 static const shell_command_t shell_commands[] = {
     { "ping", "send multicast ping", ping },
@@ -142,38 +153,37 @@ static int pong(char *addr_str)
  * @param[in] addr_str  destination address
  * @param[in] data      payload to send
  *
- * @return 0 on success, or 1 if failed
+ * @return transfered bytes, or < 0 if failed
  */
 static int pp_send(char *addr_str, char *data)
 {
-    struct sockaddr_in6 dst;
-    size_t data_len = strlen(data);
-    uint16_t port;
-    int s;
-    dst.sin6_family = AF_INET6;
-    /* parse destination address */
-    char *pch;
-    if ( (pch=strchr(addr_str,'%')) != NULL ) {
-        dst.sin6_scope_id = atoi(pch+1);
-        addr_str[pch-addr_str] = '\0';
+    int sockfd;
+    struct addrinfo hints, *res;
+    int rv;
+    int numbytes;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    if ((rv = getaddrinfo(addr_str, "6414", &hints, &res)) != 0) {
+        puts("ERROR pp_send: getaddrinfo");
+        return (-1);
     }
-    if (inet_pton(AF_INET6, addr_str, &dst.sin6_addr) != 1) {
-        puts("ERROR pp_send: parse destination address");
-        return 1;
+
+    // loop through all the results and make a socket
+    if ((sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+        puts("ERROR pp_send: create socket");
+        return (-1);
     }
-    /* parse port */
-    port = (uint16_t)PP_PORT;
-    dst.sin6_port = htons(port);
-    s = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-    if (s < 0) {
-        puts("ERROR pp_send: initializing socket");
-        return 1;
+
+    if ((numbytes = sendto(sockfd, data, strlen(data), 0, res->ai_addr, res->ai_addrlen)) < 0) {
+        printf("ERROR pp_send: sending data: %d\n", numbytes);
     }
-    if (sendto(s, data, data_len, 0, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
-        puts("ERROR pp_send: sending data");
-    }
-    close(s);
-    return 0;
+    freeaddrinfo(res);
+    close(sockfd);
+
+    return numbytes;
 }
 
 /**
@@ -187,7 +197,6 @@ static void start_receiver(void)
 #else // __RIOT__
     pthread_create(&t_receiver, NULL, _receiver, NULL);
 #endif // __RIOT__
-    puts(". started UDP server...");
 }
 
 /**
@@ -212,6 +221,7 @@ static void *_receiver(void *arg)
         puts("ERROR receiver: invalid port");
         return NULL;
     }
+    memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin6_family = AF_INET6;
     memset(&server_addr.sin6_addr, 0, sizeof(server_addr.sin6_addr));
     server_addr.sin6_port = htons(port);
@@ -225,11 +235,12 @@ static void *_receiver(void *arg)
         puts("ERROR receiver: bind socket");
         return NULL;
     }
-    printf("Success: started UDP server on port %" PRIu16 "\n", port);
+    printf(". started UDP server on port %" PRIu16 "\n", port);
     while (1) {
         int res;
         struct sockaddr_in6 src;
-        socklen_t src_len = sizeof(struct sockaddr_in6);
+        memset(&src, 0, sizeof(src));
+        socklen_t src_len = sizeof(src);
         // blocking receive, waiting for data
         if ((res = recvfrom(pp_socket, pp_buffer, sizeof(pp_buffer), 0,
                             (struct sockaddr *)&src, &src_len)) < 0) {
@@ -241,8 +252,9 @@ static void *_receiver(void *arg)
         else { // check for PING or PONG
             inet_ntop(AF_INET6, &(src.sin6_addr),
                       src_addr_str, sizeof(src_addr_str));
-            sprintf(src_addr_str, "%s%%%" PRIu32, src_addr_str, src.sin6_scope_id);
+            sprintf(src_addr_str, "%s%%%" PRIu32, src_addr_str, ntohl(src.sin6_scope_id));
             if (strcmp(pp_buffer, "PING") == 0) {
+                printf("scope_id: %"PRIu32, src.sin6_scope_id);
                 printf(". received PING from [%s].\n", src_addr_str);
                 pong(src_addr_str);
             }
