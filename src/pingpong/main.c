@@ -34,6 +34,7 @@
 #define PP_MSG_QUEUE_SIZE   (8U)
 #define PP_PORT             (6414)
 #define PP_PORT_STR         "6414"
+#define PP_IFID_STR         "4"
 
 // function prototypes
 static int ping(int argc, char **argv);
@@ -91,7 +92,7 @@ int main(void)
     char line_buf[SHELL_DEFAULT_BUFSIZE];
     shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
 #else  // __RIOT__
-    char cmd[] = "ping ff02::1%4";
+    char cmd[] = "ping ff02::1%"PP_IFID_STR;
     char *pos = cmd;
     char *argv[3];
     int argc = 1;
@@ -252,9 +253,8 @@ static void *_receiver(void *arg)
         else { // check for PING or PONG
             inet_ntop(AF_INET6, &(src.sin6_addr),
                       src_addr_str, sizeof(src_addr_str));
-            sprintf(src_addr_str, "%s%%%" PRIu32, src_addr_str, ntohl(src.sin6_scope_id));
+            sprintf(src_addr_str, "%s%%"PP_IFID_STR, src_addr_str);
             if (strcmp(pp_buffer, "PING") == 0) {
-                printf("scope_id: %"PRIu32, src.sin6_scope_id);
                 printf(". received PING from [%s].\n", src_addr_str);
                 pong(src_addr_str);
             }
