@@ -32,7 +32,6 @@
 // parameters
 #define PP_BUF_SIZE         (16)
 #define PP_MSG_QUEUE_SIZE   (8U)
-#define PP_PORT             (6414)
 #define PP_PORT_STR         "6414"
 #define PP_IFID_STR         "4"
 
@@ -92,21 +91,43 @@ int main(void)
     char line_buf[SHELL_DEFAULT_BUFSIZE];
     shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
 #else  // __RIOT__
-    char cmd[] = "ping ff02::1%"PP_IFID_STR;
-    char *pos = cmd;
-    char *argv[3];
-    int argc = 1;
-    argv[0] = pos;
-    argv[1] = NULL;
-    argv[2] = NULL;
-    if ( (pos=strchr(cmd, ' ')) != NULL ) {
-        *pos = 0;
-        argv[1] = pos+1;
-        argc = 2;
+    /* a mini shell to send pings */
+    char cmd_buf[128];
+    char cmd_ping[] = "ping";
+    while(1) {
+        puts("USAGE: ping [IP[%IF]]:");
+        memset(cmd_buf, 0, 128);
+        int cnt = 0;
+        int lws = 0;
+        int pos = 0;
+        char *argv[2];
+        int argc = 1;
+        argv[0] = cmd_buf;
+        argv[1] = NULL;
+        while (cnt < 128) {
+            int c = getchar();
+            if (c=='\n' || c=='\r') {
+                break;
+            }
+            if (c==' ') {
+                if (cnt > lws+1) {
+                    cmd_buf[cnt] = 0;
+                    lws = cnt;
+                    pos = cnt+1;
+                    ++argc;
+                }
+            } else {
+                cmd_buf[cnt] = (char)c;
+            }
+            ++cnt;
+        }
+        if (strlen(cmd_buf) < 4 || strcmp(cmd_ping, cmd_buf) != 0 || argc > 2)
+            continue;
+        if (argc > 1) {
+            argv[1] = cmd_buf + pos;
+        }
+        ping(argc, argv);
     }
-    ping(argc, argv);
-    while(1)
-        getchar();
 #endif // __RIOT__
     // should be never reached
     return 0;
@@ -158,33 +179,32 @@ static int pong(char *addr_str)
  */
 static int pp_send(char *addr_str, char *data)
 {
-    int sockfd;
+    int s;
     struct addrinfo hints, *res;
-    int rv;
-    int numbytes;
+    int ret;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
 
-    if ((rv = getaddrinfo(addr_str, "6414", &hints, &res)) != 0) {
+    if ((ret = getaddrinfo(addr_str, "6414", &hints, &res)) != 0) {
         puts("ERROR pp_send: getaddrinfo");
         return (-1);
     }
 
     // loop through all the results and make a socket
-    if ((sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+    if ((s=socket(res->ai_family,res->ai_socktype,res->ai_protocol)) < 0) {
         puts("ERROR pp_send: create socket");
         return (-1);
     }
 
-    if ((numbytes = sendto(sockfd, data, strlen(data), 0, res->ai_addr, res->ai_addrlen)) < 0) {
-        printf("ERROR pp_send: sending data: %d\n", numbytes);
+    if ((ret=sendto(s,data,strlen(data),0,res->ai_addr,res->ai_addrlen)) < 0) {
+        printf("ERROR pp_send: sending data: %d\n", ret);
     }
     freeaddrinfo(res);
-    close(sockfd);
+    close(s);
 
-    return numbytes;
+    return ret;
 }
 
 /**
@@ -215,9 +235,8 @@ static void *_receiver(void *arg)
 #ifdef __RIOT__
     msg_init_queue(pp_msg_queue, PP_MSG_QUEUE_SIZE);
 #endif // __RIOT__
-    int pp_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     /* parse port */
-    port = (uint16_t)PP_PORT;
+    port = (uint16_t)atoi(PP_PORT_STR);
     if (port == 0) {
         puts("ERROR receiver: invalid port");
         return NULL;
@@ -226,14 +245,15 @@ static void *_receiver(void *arg)
     server_addr.sin6_family = AF_INET6;
     memset(&server_addr.sin6_addr, 0, sizeof(server_addr.sin6_addr));
     server_addr.sin6_port = htons(port);
-    if (pp_socket < 0) {
+
+    int s = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    if (s < 0) {
         puts("ERROR receiver: create socket");
-        pp_socket = 0;
         return NULL;
     }
-    if (bind(pp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        pp_socket = -1;
+    if (bind(s,(struct sockaddr *)&server_addr,sizeof(server_addr)) < 0) {
         puts("ERROR receiver: bind socket");
+        close(s);
         return NULL;
     }
     printf(". started UDP server on port %" PRIu16 "\n", port);
@@ -243,7 +263,7 @@ static void *_receiver(void *arg)
         memset(&src, 0, sizeof(src));
         socklen_t src_len = sizeof(src);
         // blocking receive, waiting for data
-        if ((res = recvfrom(pp_socket, pp_buffer, sizeof(pp_buffer), 0,
+        if ((res = recvfrom(s, pp_buffer, sizeof(pp_buffer), 0,
                             (struct sockaddr *)&src, &src_len)) < 0) {
             puts("ERROR receiver: recvfrom");
         }
@@ -266,5 +286,6 @@ static void *_receiver(void *arg)
             }
         }
     }
+    close(s);
     return NULL;
 }
