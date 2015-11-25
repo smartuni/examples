@@ -34,6 +34,9 @@ response with a PONG message send to the link local unicast address of node A.
 PING message can be initiated via terminal connection to access the shell. PONG
 messages are send automatically when a PING was received.
 
+Note: the source code is _universal_ meaning it compiles under Linux or MacOS X
+as well. Just run ```gcc -o pingpong -lpthread main.c```.
+
 ### build and run
 
 Download or clone this example repository to your development system. To build
