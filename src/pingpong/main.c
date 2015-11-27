@@ -261,6 +261,7 @@ static void *_receiver(void *arg)
         int res;
         struct sockaddr_in6 src;
         memset(&src, 0, sizeof(src));
+        memset(pp_buffer, 0, sizeof(pp_buffer));
         socklen_t src_len = sizeof(src);
         // blocking receive, waiting for data
         if ((res = recvfrom(s, pp_buffer, sizeof(pp_buffer), 0,
