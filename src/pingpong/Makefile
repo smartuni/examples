@@ -2,7 +2,7 @@
 APPLICATION = smartuni_example_pingpong
 
 # If no BOARD is found in the environment, use this default:
-BOARD ?= samr21-xpro 
+BOARD ?= samr21-xpro
 
 # This has to be the absolute path to the RIOT base directory:
 RIOTBASE ?= $(CURDIR)/../..
@@ -14,11 +14,12 @@ BOARD_WHITELIST := samr21-xpro pba-d-01-kw2x
 USEMODULE += gnrc_netif_default
 USEMODULE += auto_init_gnrc_netif
 # Specify the mandatory networking modules for IPv6 and UDP
-USEMODULE += gnrc_ipv6_default
-USEMODULE += gnrc_udp
+USEMODULE += gnrc_ipv6_router_default
 USEMODULE += gnrc_conn_udp
 USEMODULE += posix_sockets
-# Add shell and commands
+# Add a routing protocol
+#USEMODULE += gnrc_rpl
+# Add also the shell, some shell commands
 USEMODULE += shell
 USEMODULE += shell_commands
 USEMODULE += ps
