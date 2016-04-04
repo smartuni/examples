@@ -214,7 +214,7 @@ static void start_receiver(void)
 {
 #ifdef __RIOT__
     thread_create(pp_stack, sizeof(pp_stack), THREAD_PRIORITY_MAIN,
-                     CREATE_STACKTEST, _receiver, NULL, "pingpong");
+                     THREAD_CREATE_STACKTEST, _receiver, NULL, "pingpong");
 #else // __RIOT__
     pthread_create(&t_receiver, NULL, _receiver, NULL);
 #endif // __RIOT__
